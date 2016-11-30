@@ -1,0 +1,93 @@
+
+cat $count_fl_name | head -3 > $fst2record
+cat $fst2record
+sed -i '1,3d' $$fst2record
+cat $$fst2record
+while read first
+do 
+echo 'Inside the Loop'
+Collect_stat=`cat $fst2record | grep -i 'COLLECT' | cut -d' ' -f1`
+if [[ $Collect_stat == COLLECT ]] ; then
+    table_name=`cat $fst2record | head -1 | cut -d' ' -f4`
+else 
+ 	table_name=`cat $fst2record | head -1 | cut -d' ' -f3`
+fi
+done < $fst2record
+
+load_type=`cat $fst2record | tail -1 | cut -d. -f1 | cut -d' ' -f3`
+if [[ "$load_type" == '' ]] ; then
+load_type=`cat $fst2record | tail -1 | cut -d. -f1 | cut -d' ' -f1`
+fi
+
+echo 'Load Type' $load_type
+#load_status=`cat $fst2record | tail -1 | cut -d. -f1 | cut -d' ' -f4`
+table_count=`cat $fst2record | head -2 | tail -1 | cut -d. -f2 | cut -d' ' -f2`
+if [[ $table_count == No ]] ; then
+    table_count=`grep 'No rows' $fst2record | sed 's/No rows/0/g' | cut -d. -f2 | cut -d' ' -f2`
+elif [[ $table_count == One ]] ; then
+ 	table_count=`grep 'One' $fst2record | sed 's/One/1/g' | cut -d. -f2 | cut -d' ' -f2`
+fi
+
+shopt -s nocasematch
+
+if [[ $load_type == failure ]] ; then
+	SUB_SCRPT_SESS=${SUB_SCRIPT_SESSION}_${table_name}_${load_type}${Failed}
+	Failed=$(( Failed + 1 ))
+	bteq .logon ${EACS_AD_TD_DBSERV}/${EACS_AD_TD_DBUSER},${EACS_AD_TD_DBPSWD} <<EOF >> $EACS_LOG_DIR/INS_JB_DTL_SUB_SCPT.log
+INSERT INTO STG_JOB_RUN_DTL( JOB_NAME, SCHEDULER_JOB_NAME, APPLICATION_NAME, AS_OF_DATE, JOB_LOAD_STATUS, JOB_START_DTTM, JOB_END_DTTM,TARGET_TABLE_NAME,DURATION_TIME, READ_ROWS_COUNT, AFFECTED_ROWS_COUNT, REJECTED_ROWS_COUNT, THROUGHPUT_COUNT, JOB_RUN_COMMENTS, MANUAL_FLAG, ACTIVE_FLAG, CRT_DTTM, CRT_USR_ID, UPD_DTTM, UPD_USR_ID) VALUES ('$SUB_SCRPT_SESS','$SCH_JOB_NAME','',DATE,'FAILED',CURRENT_TIMESTAMP(0),CURRENT_TIMESTAMP(0),'$table_name','00:00:00',0,0,0,0,'','$MANUAL_FLAG','Y',CURRENT_TIMESTAMP(0),'$EACS_AD_TD_DBUSER',CURRENT_TIMESTAMP(0),'$EACS_AD_TD_DBUSER');
+.IF ERRORCODE != 0 THEN .EXIT 1;
+.logoff
+.exit 0
+EOF
+	
+elif [[ $load_type == merge ]] ; then
+	SUB_SCRPT_SESS=${SUB_SCRIPT_SESSION}_${table_name}_${load_type}${merge}
+    merge=$(( merge + 1 ))
+	bteq .logon ${EACS_AD_TD_DBSERV}/${EACS_AD_TD_DBUSER},${EACS_AD_TD_DBPSWD} <<EOF  >> $EACS_LOG_DIR/INS_JB_DTL_SUB_SCPT.log
+INSERT INTO STG_JOB_RUN_DTL (JOB_NAME, SCHEDULER_JOB_NAME, APPLICATION_NAME, AS_OF_DATE, JOB_LOAD_STATUS, JOB_START_DTTM, JOB_END_DTTM,TARGET_TABLE_NAME,DURATION_TIME, READ_ROWS_COUNT, AFFECTED_ROWS_COUNT, REJECTED_ROWS_COUNT, THROUGHPUT_COUNT, JOB_RUN_COMMENTS, MANUAL_FLAG, ACTIVE_FLAG, CRT_DTTM, CRT_USR_ID, UPD_DTTM, UPD_USR_ID) VALUES ('$SUB_SCRPT_SESS','$SCH_JOB_NAME','',DATE,'COMPLETED',CURRENT_TIMESTAMP(0),CURRENT_TIMESTAMP(0),'$table_name','00:00:00','$table_count','$table_count',0,0,'','$MANUAL_FLAG','Y',CURRENT_TIMESTAMP(0),'$EACS_AD_TD_DBUSER',CURRENT_TIMESTAMP(0),'$EACS_AD_TD_DBUSER');
+.IF ERRORCODE != 0 THEN .EXIT 1;
+.logoff
+.exit 0
+EOF
+	
+elif [[ $load_type == insert ]] ; then
+	SUB_SCRPT_SESS=${SUB_SCRIPT_SESSION}_${table_name}_${load_type}${insert}
+    insert=$(( insert + 1 ))
+	
+	bteq .logon ${EACS_AD_TD_DBSERV}/${EACS_AD_TD_DBUSER},${EACS_AD_TD_DBPSWD} <<EOF  >> $EACS_LOG_DIR/INS_JB_DTL_SUB_SCPT.log
+INSERT INTO STG_JOB_RUN_DTL (JOB_NAME, SCHEDULER_JOB_NAME, APPLICATION_NAME, AS_OF_DATE, JOB_LOAD_STATUS, JOB_START_DTTM, JOB_END_DTTM, TARGET_TABLE_NAME,DURATION_TIME, READ_ROWS_COUNT, AFFECTED_ROWS_COUNT, REJECTED_ROWS_COUNT, THROUGHPUT_COUNT, JOB_RUN_COMMENTS, MANUAL_FLAG, ACTIVE_FLAG, CRT_DTTM, CRT_USR_ID, UPD_DTTM, UPD_USR_ID) VALUES ('$SUB_SCRPT_SESS','$SCH_JOB_NAME','',DATE,'COMPLETED',CURRENT_TIMESTAMP(0),CURRENT_TIMESTAMP(0),'$table_name','00:00:00','$table_count','$table_count',0,0,'','$MANUAL_FLAG','Y',CURRENT_TIMESTAMP(0),'$EACS_AD_TD_DBUSER',CURRENT_TIMESTAMP(0),'$EACS_AD_TD_DBUSER');
+.IF ERRORCODE != 0 THEN .EXIT 1;
+.logoff
+.exit 0
+EOF
+	
+elif [[ $load_type == delete ]] ; then
+	SUB_SCRPT_SESS=${SUB_SCRIPT_SESSION}_${table_name}_${load_type}${delete}
+    delete=$(( delete + 1 ))
+	bteq .logon ${EACS_AD_TD_DBSERV}/${EACS_AD_TD_DBUSER},${EACS_AD_TD_DBPSWD} <<EOF  >> $EACS_LOG_DIR/INS_JB_DTL_SUB_SCPT.log
+INSERT INTO STG_JOB_RUN_DTL( JOB_NAME, SCHEDULER_JOB_NAME, APPLICATION_NAME, AS_OF_DATE, JOB_LOAD_STATUS, JOB_START_DTTM, JOB_END_DTTM, TARGET_TABLE_NAME,DURATION_TIME, READ_ROWS_COUNT, AFFECTED_ROWS_COUNT, REJECTED_ROWS_COUNT, THROUGHPUT_COUNT, JOB_RUN_COMMENTS, MANUAL_FLAG, ACTIVE_FLAG, CRT_DTTM, CRT_USR_ID, UPD_DTTM, UPD_USR_ID) VALUES ('$SUB_SCRPT_SESS','$SCH_JOB_NAME','',DATE,'COMPLETED',CURRENT_TIMESTAMP(0),CURRENT_TIMESTAMP(0),'$table_name','00:00:00','$table_count','$table_count',0,0,'','$MANUAL_FLAG','Y',CURRENT_TIMESTAMP(0),'$EACS_AD_TD_DBUSER',CURRENT_TIMESTAMP(0),'$EACS_AD_TD_DBUSER');
+.IF ERRORCODE != 0 THEN .EXIT 1;
+.logoff
+.exit 0
+EOF
+	
+else [[ $load_type == update ]]
+    tab_name=`cat $fst2record | head -1 | cut -d' ' -f2`
+	SUB_SCRPT_SESS=${SUB_SCRIPT_SESSION}_${tab_name}_${load_type}${update}
+	echo 'Target Table for update' $tab_name
+    update=$(( update + 1 ))
+	bteq .logon ${EACS_AD_TD_DBSERV}/${EACS_AD_TD_DBUSER},${EACS_AD_TD_DBPSWD} <<EOF  >> $EACS_LOG_DIR/INS_JB_DTL_SUB_SCPT.log
+INSERT INTO STG_JOB_RUN_DTL (JOB_NAME, SCHEDULER_JOB_NAME, APPLICATION_NAME, AS_OF_DATE, JOB_LOAD_STATUS, JOB_START_DTTM, JOB_END_DTTM, TARGET_TABLE_NAME,DURATION_TIME, READ_ROWS_COUNT, AFFECTED_ROWS_COUNT, REJECTED_ROWS_COUNT, THROUGHPUT_COUNT, JOB_RUN_COMMENTS, MANUAL_FLAG, ACTIVE_FLAG, CRT_DTTM, CRT_USR_ID, UPD_DTTM, UPD_USR_ID) VALUES ('$SUB_SCRPT_SESS','$SCH_JOB_NAME','',DATE,'COMPLETED',CURRENT_TIMESTAMP(0),CURRENT_TIMESTAMP(0),'$tab_name','00:00:00','$table_count','$table_count',0,0,'','$MANUAL_FLAG','Y',CURRENT_TIMESTAMP(0),'$EACS_AD_TD_DBUSER',CURRENT_TIMESTAMP(0),'$EACS_AD_TD_DBUSER');
+.IF ERRORCODE != 0 THEN .EXIT 1;
+.logoff
+.exit 0
+EOF
+fi
+
+if [ ${PIPESTATUS[0]} -ne 0  ] ; then
+ echo "Insert for $SUB_SCRIPT_SESSION has failed on `date`"
+ exit 1
+fi
+
+done < $count_fl_name
+exit 0
