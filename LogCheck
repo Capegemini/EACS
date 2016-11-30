@@ -1,0 +1,35 @@
+rm -f table_count_detail*
+rm -f tble_cnt_detail*
+rm -f fst2record*
+rm -f INS_JB_DTL_SUB_SCPT.log
+
+count_fl_name=table_count_detail`date +%s`
+
+grep -i 'merge into\|merge completed\|insert into\|insert completed\|delete from\|del from\|^delete\|delete completed\|^update\|update completed\|^Failure\|^  UPDATE \|Total elapsed' $BTEQ_LOG_NM | sed 's/  */ /g' | grep -v '^COLLECT STATISTICS' | grep -v '^ *--' | grep -v '^UPDATE SET' | grep -v '^UPDATED' | grep -v '^DELETED' | grep -v 'Update Statement'| sed 's/*/ /g' | sed -e 's/^[ \t]*//' | grep -v '^/' | sed -e '/^ *update *$/Id' > $count_fl_name
+
+cp $count_fl_name count_fl_name1
+merge=1
+insert=1
+delete=1
+update=1
+
+total_count=`cat $count_fl_name | wc -l`
+authen=`expr $total_count % 3`
+echo 'Total line count'  $total_count
+if [ $total_count -eq 0 -o $authen -eq 1 ]; then
+    #echo "Invalid or empty lines found from log file"
+    exit -3
+fi
+
+while read line 
+do 
+
+total_count=`cat $count_fl_name | wc -l`
+authen=`expr $total_count % 3`
+echo 'authen'$authen
+if [ $total_count -eq 0 -o $authen -eq 1 ]; then
+    echo "Insert into JOB_RUN_DTL_STG table Completed"
+    break
+fi
+
+fst2record=fst2record`date +%s`
